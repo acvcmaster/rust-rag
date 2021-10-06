@@ -1,20 +1,34 @@
+use std::{
+    net::{SocketAddr, TcpListener},
+    sync::{Arc, Mutex},
+    thread::spawn,
+};
 
-use crate::packets::{PacketCaLogin, get_string, packet_from_bytes};
+use login_server::LoginServer;
 
+// use crate::packets::{get_packet, panic_expected_packet, Packet};
+
+pub mod login_server;
 pub mod packets;
 
+#[macro_use] extern crate log;
+
 fn main() {
-    let bytes: Vec<u8> = vec![
-        0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x61, 0x63, 0x76, 0x63, 0x6d, 0x61, 0x73, 0x74, 0x65,
-        0x72, 0x32, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x61, 0x63,
-        0x76, 0x63, 0x6d, 0x61, 0x73, 0x74, 0x65, 0x72, 0x32, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1,
-    ];
+    let addr = "0.0.0.0:6900".parse::<SocketAddr>().unwrap();
+    let listener = TcpListener::bind(addr).unwrap();
+    let login_server = Arc::new(Mutex::new(LoginServer::new()));
 
-    let login_packet = packet_from_bytes::<PacketCaLogin>(&bytes);
-    let string = get_string(&login_packet.passwd, true);
+    loop {
+        match listener.accept() {
+            Ok((mut stream, address)) => {
+                println!("Received connection from remote host: {}", address);
+                let server_copy = Arc::clone(&login_server);
 
-
-    println!("'{}'", string);
-    println!("{:?}", login_packet);
+                spawn(move || {
+                    LoginServer::receive_data(server_copy, &mut stream, &address);
+                });
+            }
+            Err(_) => println!("Could not estabilish connection. Socket error."),
+        }
+    }
 }
