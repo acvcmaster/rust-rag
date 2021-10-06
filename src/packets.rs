@@ -11,7 +11,7 @@ pub enum Packet<'a> {
     },
     AcRefuseLogin {
         error_code: u8,
-        block_date: &'a str,
+        block_date: Option<&'a str>,
     },
 }
 
@@ -76,19 +76,22 @@ pub fn to_bytes<'a>(packet: Packet, buffer: &mut [u8]) -> Result<usize, PacketEr
 
             if buffer.len() >= length {
                 let packet_type_bytes = packet_type.to_le_bytes();
-                let block_data_bytes = block_date.as_bytes();
 
                 buffer[0] = packet_type_bytes[0];
                 buffer[1] = packet_type_bytes[1];
                 buffer[2] = error_code;
 
-                // [u8; 20]
-                for i in 0..block_data_bytes.len() {
-                    if i >= 20 {
-                        break;
-                    }
+                if let Some(value) = block_date {
+                    let block_data_bytes = value.as_bytes();
 
-                    buffer[3 + i] = block_data_bytes[i];
+                    // [u8; 20]
+                    for i in 0..block_data_bytes.len() {
+                        if i >= 20 {
+                            break;
+                        }
+    
+                        buffer[3 + i] = block_data_bytes[i];
+                    }
                 }
 
                 Ok(length)

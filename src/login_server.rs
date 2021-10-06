@@ -94,7 +94,7 @@ impl LoginServer {
             stream,
             Packet::AcRefuseLogin {
                 error_code: 3,
-                block_date: ""
+                block_date: None
             },
         );
     }
