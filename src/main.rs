@@ -6,22 +6,31 @@ use std::{
 
 use login_server::LoginServer;
 
-// use crate::packets::{get_packet, panic_expected_packet, Packet};
-
 pub mod login_server;
-pub mod packets;
+mod packets {
+    pub mod definition;
+    pub mod util;
+    pub mod server {
+        pub mod ac_refuse_login;
+        pub mod sc_notify_ban;
+    }
+}
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
+extern crate byteorder;
 
 fn main() {
     let addr = "0.0.0.0:6900".parse::<SocketAddr>().unwrap();
     let listener = TcpListener::bind(addr).unwrap();
     let login_server = Arc::new(Mutex::new(LoginServer::new()));
 
+    println!("Login server started. Listening on {}.", addr);
+
     loop {
         match listener.accept() {
             Ok((mut stream, address)) => {
-                println!("Received connection from remote host: {}", address);
+                println!("Received connection from remote host: {}.", address);
                 let server_copy = Arc::clone(&login_server);
 
                 spawn(move || {
