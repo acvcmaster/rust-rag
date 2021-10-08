@@ -10,9 +10,14 @@ pub mod login_server;
 mod packets {
     pub mod definition;
     pub mod util;
+    pub mod client {
+        pub mod ca_login_packet;
+        pub mod ch_enter_packet;
+    }
     pub mod server {
         pub mod ac_refuse_login;
         pub mod sc_notify_ban;
+        pub mod ac_accept_login;
     }
 }
 

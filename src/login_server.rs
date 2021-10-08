@@ -1,12 +1,11 @@
 use std::{
     io::{Read, Write},
-    net::{SocketAddr, TcpStream},
+    net::{Ipv4Addr, SocketAddr, TcpStream},
     sync::{Arc, Mutex},
 };
 
-use crate::packets::{
-    definition::{get_packet, to_bytes, Packet, PacketError},
-    server::sc_notify_ban::NotifyBanReason,
+use crate::packets::definition::{
+    get_bytes, get_packet, Packet, PacketError, Server, ServerStatus, Sex,
 };
 
 #[derive(Debug, Clone)]
@@ -59,25 +58,40 @@ impl LoginServer {
     ) {
         if length > 2 {
             match get_packet(buffer) {
-                Packet::CaLogin {
-                    packet_type,
-                    version,
-                    id,
-                    passwd,
-                    client_type,
-                } => Self::handle_login(
-                    login_server,
-                    stream,
-                    address,
-                    version,
-                    id,
-                    passwd,
-                    client_type,
-                ),
-                _ => debug!("Debug error: INVALID_CLIENT_PACKET"),
+                Ok(packet) => match packet {
+                    Packet::CaLogin {
+                        packet_type,
+                        version,
+                        id,
+                        passwd,
+                        client_type,
+                    } => Self::handle_login(
+                        login_server,
+                        stream,
+                        address,
+                        version,
+                        id,
+                        passwd,
+                        client_type,
+                    ),
+                    Packet::ChEnter {
+                        packet_type,
+                        auth_code,
+                        account_id,
+                        user_level,
+                        client_type,
+                        sex,
+                    } => {
+                        let buf = [0x6c, 0x00, 0x1];
+                        stream.write(&buf).unwrap();
+                        println!("Sending ack..");
+                    }
+                    _ => println!("Debug error: INVALID_CLIENT_PACKET"),
+                },
+                Err(error) => println!("Debug error: {}", error.message),
             }
         } else {
-            debug!("Debug error: EMPTY_CLIENT_DATA");
+            println!("Debug error: EMPTY_CLIENT_DATA");
             *empty = *empty + 1;
         }
     }
@@ -92,36 +106,31 @@ impl LoginServer {
         client_type: u8,
     ) {
         println!("Received login from account '{}' at {}.", id, address);
-        // Self::send_packet(stream, Packet::AcRefuseLogin { error_code: 6, block_date: Some("2021-12-31 15:35:51") });
 
-        // let a = [
-        //     0x04, 0xAC, 0x4F, 0x2, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0,
-        //     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        //     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 8, 39, 1, 10, 0xFA,
-        //     0x1A, 0x44, 0x65, 0x76, 0x65, 0x6c, 0x6f, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x53,
-        //     0x65, 0x72, 0x76, 0x65, 0x72, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        // ];
+        let packet = Packet::AcAcceptLogin {
+            auth_code: 0,
+            account_id: 1234,
+            user_level: 1,
+            sex: Sex::Male,
+            server_list: &[Server {
+                ip: Ipv4Addr::new(127, 0, 0, 1),
+                port: 6900,
+                name: "Urd",
+                user_count: 0,
+                state: ServerStatus::Normal,
+                is_new: true,
+            }],
+        };
 
-        // let b = [
-        //     0x04, 0xAC, 0x4F, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0,
-        //     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        //     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4D, 8, 39, 1, 10, 0xFA,
-        //     0x1A, 0x44, 0x65, 0x76, 0x65, 0x6c, 0x6f, 0x70, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x53,
-        //     0x65, 0x72, 0x76, 0x65, 0x72, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        // ];
-
-        // Self::print_packet(&b);
-
-        // match stream.write(&b) {
-        //     Ok(_) => println!("DATA SENT!!"),
-        //     Err(_) => println!("ERROR!"),
-        // }
+        if Self::send_packet(stream, packet).is_err() {
+            return;
+        }
     }
 
     pub fn send_packet(stream: &mut TcpStream, packet: Packet) -> Result<(), PacketError> {
-        let mut buffer = [0; 512];
+        let mut buffer = [0; 2048];
 
-        match to_bytes(packet, &mut buffer) {
+        match get_bytes(packet, &mut buffer) {
             Ok(size) => match stream.write(&buffer[..size]) {
                 Ok(_) => {
                     Self::print_packet(&buffer[..size]);

@@ -1,15 +1,18 @@
-use std::{mem::size_of, str::from_utf8};
+use std::{mem::size_of, net::Ipv4Addr, str::from_utf8};
 
 use super::definition::PacketError;
 
-pub fn from_bytes<'a, T>(bytes: &'a [u8]) -> &'a T {
+pub fn from_bytes<T>(bytes: &[u8]) -> T
+where
+    T: Default + Copy,
+{
     unsafe {
         let packet_bytes = &bytes[0..size_of::<T>()];
         let pointer: *const u8 = packet_bytes.as_ptr();
 
         match pointer.cast::<T>().as_ref() {
-            Some(reference) => reference,
-            None => panic!("INVALID_PACKET_CAST"),
+            Some(reference) => *reference,
+            None => T::default(),
         }
     }
 }
@@ -70,4 +73,30 @@ pub fn write_str(buffer: &mut [u8], data: &str) -> Result<usize, PacketError> {
             ),
         })
     }
+}
+
+pub fn write_mem(target: &mut [u8], source: &[u8]) -> Result<usize, PacketError> {
+    let target_len = target.len();
+    let source_len = source.len();
+
+    if target_len >= source_len {
+        for i in 0..source_len {
+            target[i] = source[i];
+        }
+        Ok(source_len)
+    } else {
+        Err(PacketError {
+            message: format!(
+                "WRITE_MEM_BUFFER_TOO_SMALL (must be at least {} bytes long)",
+                source_len
+            ),
+        })
+    }
+}
+
+pub fn write_ip(buffer: &mut [u8], ip: Ipv4Addr) -> Result<usize, PacketError> {
+    let mut octets = ip.octets();
+    octets.reverse(); // fixing byte order
+
+    write_mem(buffer, &octets)
 }
